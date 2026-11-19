@@ -142,6 +142,7 @@ class CarLifeHuClient(
      */
     private val initialWidth: Int = 1280,
     private val initialHeight: Int = 720,
+    private val allowInitial720pFallback: Boolean = false,
     /**
      * 98311 的 `needAdapterScreen`（字段 9）：请引擎在「车机画面比例 ≠ 编码比例」时做
      * 等比适配而不是拉伸。默认 true——车机屏几乎都不是 16:9（奥迪 MIB3 是 21:9）。
@@ -338,6 +339,7 @@ class CarLifeHuClient(
     private var reinitCount = 0
     private var encoderInitPending = false
     private var pendingEncoderForce = false
+    private var initial720pFallback = false
 
     /** 最近一次**真正发出**的 98311 尺寸签名（`宽x高@帧率`），配合 [sendEncoderInit] 去重。 */
     private var lastEncInitSig: String? = null
@@ -1223,6 +1225,7 @@ class CarLifeHuClient(
                 if (length > 0) data.readFully(payload)
                 if (length <= 0) continue
                 videoFrameCount++
+                if (videoFrameCount == 1L) log("CARLIFE: 已收到引擎首帧（${payload.size}B）")
                 lastFrameAt = android.os.SystemClock.uptimeMillis()
                 reinitCount = 0
                 windowFrames++
@@ -1307,13 +1310,31 @@ class CarLifeHuClient(
             val need = (NO_FRAME_REINIT_MS * (1 + reinitCount / 3)).coerceAtMost(MAX_REINIT_INTERVAL_MS)
             if (idle < need) continue
             reinitCount = (reinitCount + 1).coerceAtMost(1_000)
-            log(
-                "CARLIFE: ${idle / 1000}s 无视频帧——第 $reinitCount 次重发 98311" +
-                    "（socket 存活，保持连接不重建）",
-            )
+            if (!applyInitial720pFallback()) {
+                log(
+                    "CARLIFE: ${idle / 1000}s 无视频帧——第 $reinitCount 次重发 98311" +
+                        "（socket 存活，保持连接不重建）",
+                )
+            }
             lastFrameAt = android.os.SystemClock.uptimeMillis()
             resendEncInit()
         }
+    }
+
+    /** 三星引擎一直未送帧时，本次会话仅尝试一次 720p；接收端画布不随之改动。 */
+    @Synchronized
+    private fun applyInitial720pFallback(): Boolean {
+        if (!allowInitial720pFallback || initial720pFallback || !firstInitSent || videoFrameCount != 0L) {
+            return false
+        }
+        val (width, height) = CarCanvasMemory.DEFAULT
+        if (requestedWidth <= width && requestedHeight <= height) return false
+        val previousSize = "${requestedWidth}x$requestedHeight"
+        initial720pFallback = true
+        requestedWidth = width
+        requestedHeight = height
+        log("CARLIFE: 首帧超时，编码申请 $previousSize → ${width}x$height")
+        return true
     }
 
     /** 重连 9242。成功返回 true（已挂上新的读线程）。 */
@@ -1366,7 +1387,9 @@ class CarLifeHuClient(
      *
      * 幂等：宽高未变时跳过（避免车机 1s 轮询重复触发重发 98311 打断推流）。
      */
+    @Synchronized
     fun setRequestedResolution(width: Int, height: Int) {
+        if (initial720pFallback) return
         val w = width.coerceAtLeast(320)
         val h = height.coerceAtLeast(180)
         if (w == requestedWidth && h == requestedHeight) return
@@ -1588,6 +1611,7 @@ class CarLifeHuClient(
             lastEncInitSig = sig
             lastEncInitAt = now
             firstInitSent = true
+            log("CARLIFE: 已下发 98311 $sig")
         }
     }
 

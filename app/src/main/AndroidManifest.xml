@@ -57,6 +57,7 @@
     <uses-feature android:name="android.hardware.wifi" android:required="false" />
 
     <queries>
+        <package android:name="com.samsung.android.carlink" />
         <package android:name="com.autonavi.amapauto" />
         <package android:name="com.autonavi.minimap" />
         <!-- 应用桌面需要枚举全部可启动应用（Android 11+ 包可见性） -->

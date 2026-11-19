@@ -324,6 +324,18 @@
                     android:layout_marginStart="54dp"
                     android:background="#5A394444" />
 
+                <Button
+                    android:id="@+id/btnOpenSamsungCarLife"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/bg_tbtn"
+                    android:minHeight="48dp"
+                    android:text="@string/open_samsung_carlink"
+                    android:textAllCaps="false"
+                    android:textColor="@color/m3_primary"
+                    android:visibility="gone" />
+
                 <!-- 启动后自动连接（默认开启）：打开 App 即发起连接，无需手动点按钮 -->
                 <LinearLayout
                     android:layout_width="match_parent"

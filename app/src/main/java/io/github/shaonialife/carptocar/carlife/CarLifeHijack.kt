@@ -401,20 +401,6 @@ object CarLifeHijack {
     @Volatile
     private var requestedH = 0
 
-    /**
-     * 首轮 `98311` 要报的编码分辨率 = **上次连过的车机画布**（[CarCanvasMemory]）。
-     *
-     * 引擎只在创建编码器之前认 98311 的宽高，而 CarLife+ 端口一开我们就得握手
-     * （此时还没连车机、拿不到 `/info` 画布），首轮必然早于画布到达。所以只能用
-     * 「上次的画布」抢在引擎建编码器之前把值报对：同一台车第二次起就按画布编码。
-     * 无缓存时保持引擎默认 1280×720。
-     */
-    @Volatile
-    private var initialCanvasW = CarCanvasMemory.DEFAULT.first
-
-    @Volatile
-    private var initialCanvasH = CarCanvasMemory.DEFAULT.second
-
     /** prewarm 时拿到的应用上下文，用于落盘「车机画布」（见 [setRequestedResolution]）。 */
     @Volatile
     private var appContext: android.content.Context? = null
@@ -741,21 +727,6 @@ object CarLifeHijack {
         running.set(true)
         logSink = log
         appContext = context.applicationContext
-        // 上次连过的车机画布：首轮 98311 就按它申请，引擎才有可能在建编码器时就用对尺寸
-        // （详见 CarCanvasMemory 的说明）。没有缓存 = 首次连这台车，只能先用默认 1280×720。
-        val cachedCanvas = CarCanvasMemory.last(context)
-        initialCanvasW = cachedCanvas?.first ?: CarCanvasMemory.DEFAULT.first
-        initialCanvasH = cachedCanvas?.second ?: CarCanvasMemory.DEFAULT.second
-        log(
-            if (cachedCanvas != null) {
-                "CARLIFE: 上次车机画布 ${cachedCanvas.first}×${cachedCanvas.second}（缓存）" +
-                    "——首轮 98311 就按它申请，引擎建编码器即对齐"
-            } else {
-                "CARLIFE: 无车机画布缓存，首轮 98311 用默认 " +
-                    "${CarCanvasMemory.DEFAULT.first}×${CarCanvasMemory.DEFAULT.second}" +
-                    "（首次连某台车只能如此，第二次起自动对齐）"
-            },
-        )
         touchPressed = false
         touchCount = 0
         gestureMoves = 0
@@ -989,6 +960,13 @@ object CarLifeHijack {
                     source = AudioSource.NAV,
                 )
             if (!publishAudioSource(sink, naviSink)) return
+            // 每次建立引擎会话都读最新画布，包括同一进程内的重连。
+            val cachedCanvas = CarCanvasMemory.last(appContext)
+            val (initialWidth, initialHeight) = cachedCanvas ?: CarCanvasMemory.DEFAULT
+            logSink?.invoke(
+                "CARLIFE: 引擎首轮画布 ${initialWidth}×$initialHeight" +
+                    if (cachedCanvas != null) "（接收端已通告）" else "（默认）",
+            )
             val hu =
                 CarLifeHuClient(
                     host = "127.0.0.1",
@@ -1056,8 +1034,9 @@ object CarLifeHijack {
                     // `/info` 到了再改（setRequestedResolution）已经晚了，引擎只回一个确认值、
                     // 码流尺寸不动（2026-11-04 奥迪 3810：申请 1412×654 实编 1280×720 → 整屏黑）。
                     // 之后拿到的真实画布仍由 setRequestedResolution 覆盖并落盘。
-                    initialWidth = initialCanvasW,
-                    initialHeight = initialCanvasH,
+                    initialWidth = initialWidth,
+                    initialHeight = initialHeight,
+                    allowInitial720pFallback = android.os.Build.MANUFACTURER.equals("samsung", ignoreCase = true),
                 )
             // start() 在握手返回前就会拉起视频读线程：必须先用旧会话栅栏通知解码状态复位，
             // 避免新读线程先送出首帧 IDR 后再被复位冲掉。

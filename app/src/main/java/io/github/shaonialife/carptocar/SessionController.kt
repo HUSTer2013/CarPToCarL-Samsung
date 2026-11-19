@@ -919,6 +919,12 @@ object SessionController {
 
     fun logText(): String = synchronized(logLock) { logBuilder.toString() }
 
+    fun copyableLogText(): String = synchronized(logLock) {
+        val recent = logBuilder.toString()
+        val earlierEvents = CriticalEvents.snapshot().filterNot { it in recent }
+        if (earlierEvents.isEmpty()) recent else recent + "\n较早的关键事件\n" + earlierEvents.joinToString("")
+    }
+
     /**
      * 派发系统媒体键。桌面音乐卡的按钮与车机/方向盘媒体键（Consumer HID）共用这一路径。
      *
@@ -1087,7 +1093,10 @@ object SessionController {
      * 没反应」根因，2026-10-16）。不要恢复该调用：空串与真实日志行无法区分。
      */
     fun clearLog() {
-        synchronized(logLock) { logBuilder.setLength(0) }
+        synchronized(logLock) {
+            logBuilder.setLength(0)
+            CriticalEvents.clear()
+        }
     }
 
     // ---- 会话对象（进程级所有权；Activity 重建不影响）----

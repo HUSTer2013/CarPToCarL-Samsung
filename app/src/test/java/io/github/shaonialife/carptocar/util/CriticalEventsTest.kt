@@ -31,6 +31,26 @@ class CriticalEventsTest {
     }
 
     @Test
+    fun `首轮申请和实际视频尺寸随日志导出`() {
+        val startupGeometry =
+            listOf(
+                "[10:00:00.000] CARLIFE: 引擎首轮画布 1280×720（默认）",
+                "[10:00:00.100] CARLIFE: 主动推送首轮 98311 视频编码初始化 1280x720@60",
+                "[10:00:01.000] DISPLAY: 车机 2296×1080（/info 通告）",
+                "[10:00:02.000] VIDEO: 尺寸 coded=1280x720 visible=1280x720 declared=1280x720",
+                "[10:00:02.001] VIDEO: 已向车机推送提示帧（已连接，但没有 CarLife 画面）",
+                "[10:00:11.000] CARLIFE: 首帧超时，编码申请 2296x1080 → 1280x720",
+                "[10:00:11.300] CARLIFE: 已下发 98311 1280x720@30",
+                "[10:00:11.400] CARLIFE: 手机确认编码参数 1280x720@30（申请 1280x720@30），启动推流",
+                "[10:00:12.000] CARLIFE: 已收到引擎首帧（4096B）",
+                "[10:00:12.001] CARLIFE: 码流真实分辨率 1280x720（原 0 x 0，谈好档位 1280x720）",
+            )
+        startupGeometry.forEach(CriticalEvents::note)
+        repeat(500) { CriticalEvents.note("[10:00:05.000] VIDEO: 帧 #$it 已发送") }
+        assertEquals(startupGeometry, CriticalEvents.snapshot())
+    }
+
+    @Test
     fun `每 30 秒的趋势行不进环`() {
         CriticalEvents.note("[10:00:30.000] AUDIO: 链路体检 t102/AAC_LC —— 累计 1406 包；锚点 30/30 被拒")
         CriticalEvents.note("[10:00:30.100] CARLIFE: 音频直通 216 包 / 864KB / 1413kbps · 电平 100%")

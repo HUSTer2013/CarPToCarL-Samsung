@@ -79,9 +79,9 @@ android {
             signingConfig = signingConfigs.getByName(if (hasReleaseKeystore) "release" else "debug")
         }
         debug {
-            // **不要加 applicationIdSuffix**：本项目 debug 包就是日常使用的包——
-            // Shizuku 授权是按包名授予的，改包名会要求重新授权。
-            versionNameSuffix = "-debug"
+            // 独立安装，便于与上游原版和前两轮测试包并存。
+            applicationIdSuffix = ".samsungtest3"
+            versionNameSuffix = "-samsung-test3"
         }
     }
 

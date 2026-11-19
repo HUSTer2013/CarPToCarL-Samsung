@@ -5,11 +5,13 @@ import android.animation.ObjectAnimator
 import android.app.NotificationManager
 import android.bluetooth.BluetoothDevice
 import android.content.BroadcastReceiver
+import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
@@ -88,6 +90,8 @@ class MainActivity : AppCompatActivity() {
     private companion object {
         const val DEFAULT_CONNECTING_HINT = "蓝牙 iAP2 握手 → 加入车机热点 → 建立 CarPlay 会话"
         const val KEY_DISCLAIMER_DEADLINE = "disclaimer_deadline"
+        const val SAMSUNG_CARLINK_PACKAGE = "com.samsung.android.carlink"
+        const val SAMSUNG_CARLINK_SETTINGS = "carlink://com.samsung.carlink/setting"
 
         /** 本机蓝牙地址未填写：英雄卡副标题与输入框下方提示共用同一句。 */
         const val HINT_MAC_MISSING = "本机蓝牙地址未填写 —— 请先在下方填写并保存"
@@ -1130,6 +1134,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         // ---- 连接准备 ----
+        bindSamsungSettingsShortcut()
         // 启动后自动连接：默认开启。打开 App 即发起连接，不必每次点英雄卡；
         // 需要在连之前改「下次连接起效」的项（分辨率缩放 / CarLife 劫持开关）时关掉它。
         //
@@ -1438,7 +1443,7 @@ class MainActivity : AppCompatActivity() {
             renderConsole(SessionController.logText())
         }
         findViewById<ImageView>(R.id.btnCopyLog).setOnClickListener {
-            val text = SessionController.logText()
+            val text = SessionController.copyableLogText()
             if (text.isEmpty()) {
                 snack("日志为空")
                 return@setOnClickListener
@@ -1523,6 +1528,26 @@ class MainActivity : AppCompatActivity() {
                 .rotation(if (opening) 180f else 0f)
                 .setDuration(250L)
                 .start()
+        }
+    }
+
+    private fun bindSamsungSettingsShortcut() {
+        val intent =
+            Intent(Intent.ACTION_VIEW, Uri.parse(SAMSUNG_CARLINK_SETTINGS))
+                .setPackage(SAMSUNG_CARLINK_PACKAGE)
+        val activity = packageManager.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo ?: return
+        if (activity.packageName != SAMSUNG_CARLINK_PACKAGE || !activity.exported || !activity.enabled) return
+
+        val shortcut = findViewById<View>(R.id.btnOpenSamsungCarLife)
+        shortcut.visibility = View.VISIBLE
+        shortcut.setOnClickListener {
+            try {
+                startActivity(intent)
+            } catch (_: ActivityNotFoundException) {
+                snack(getString(R.string.open_samsung_carlink_failed))
+            } catch (_: SecurityException) {
+                snack(getString(R.string.open_samsung_carlink_failed))
+            }
         }
     }
 
